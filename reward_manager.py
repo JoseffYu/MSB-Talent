@@ -58,6 +58,7 @@ class GameRewardManager:
         self.m_last_frame_pos = [] #add
         self.m_last_frame_target = None
         self.last_few_frame_hp = deque(maxlen=5)
+        self.count_frame = 0
 
     # Used to initialize the maximum experience value for each agent level
     # 用于初始化智能体各个等级的最大经验值
@@ -83,6 +84,7 @@ class GameRewardManager:
         self.frame_data_process(frame_data)
         self.get_reward(frame_data, self.m_reward_value)
         self.last_frame_data_process(frame_data)
+        self.count_frame += 1
 
         frame_no = frame_data["frameNo"]
         if self.time_scale_arg > 0:
@@ -95,6 +97,7 @@ class GameRewardManager:
     # 计算每帧的每个奖励子项的信息
     # main_hero, enemy_hero = None, None
     # main_tower, main_spring, enemy_tower, enemy_spring, main_soldiers,enemy_soldiers = None, None, None, None,[],[]
+    
     def set_cur_calc_frame_vec(self, cul_calc_frame_map, frame_data, camp):
         #global main_hero, enemy_hero, main_tower, main_spring, enemy_tower, enemy_spring, main_soldiers, enemy_soldiers
 
@@ -134,10 +137,9 @@ class GameRewardManager:
                     enemy_spring = organ
                 elif organ_subtype == "ACTOR_SUB_SOLDIER":
                     self.enemy_soldiers.append(organ)
-        #print(main_tower)
+
         hit_target_info = main_hero["actor_state"].get("hit_target_info", None)
         tower_hit_tar_info =  main_tower['attack_target']#.get("hit_target_info", None)
- 
 
         for reward_name, reward_struct in cul_calc_frame_map.items():
             reward_struct.last_frame_value = reward_struct.cur_frame_value
@@ -260,7 +262,6 @@ class GameRewardManager:
                             if distance > max_distance:
                                 max_distance = distance
                                 furthest_enemy_soldier_runtime_id = soldier ['runtime_id']
-                        #hit_target_info = main_hero["actor_state"].get("hit_target_info", None)
                         
                         if if_main_hit_solder!=0 and if_hit_solder !=0:
                             balance_rate+=0.2
@@ -284,6 +285,7 @@ class GameRewardManager:
             exp_sum += self.m_each_level_max_exp[i]
         exp_sum += this_hero_info["exp"]
         return exp_sum
+
 
     # Calculate the forward reward based on the distance between the agent and both defensive towers
     # 用智能体到双方防御塔的距离，计算前进奖励
@@ -334,7 +336,7 @@ class GameRewardManager:
         self.set_cur_calc_frame_vec(self.m_main_calc_frame_map, frame_data, main_camp)
         self.set_cur_calc_frame_vec(self.m_enemy_calc_frame_map, frame_data, enemy_camp)
     
-###########################################################
+
     def last_frame_data_process(self, frame_data):
         main_camp, enemy_camp = -1, -1
         for hero in frame_data["hero_states"]:
@@ -351,7 +353,9 @@ class GameRewardManager:
                 self.main_hero_camp = main_camp
                 self.m_last_frame_totalHurtToHero =hero["totalHurtToHero"]
                 self.m_last_frame_totalBeHurtByHero =hero["totalBeHurtByHero"]
-                self.last_few_frame_hp.append(hero["actor_state"]["hp"])
+                if self.count_frame % 20 == 0:
+                    self.last_few_frame_hp.append(hero["actor_state"]["hp"])
+                    self.count_frame = 0
                 if self.enemy_soldiers != []:
                     total_hp = 0
                     for soldier in self.enemy_soldiers:
@@ -360,30 +364,21 @@ class GameRewardManager:
                 else:self.m_last_frame_soldier_av_hp = 0
             else:
                 enemy_camp = hero["actor_state"]["camp"]
-#######################################################################
+    
 
-#################################################################
     # Use the values obtained in each frame to calculate the corresponding reward value
     # 用每一帧得到的奖励子项信息来计算对应的奖励值
     def calculate_distance(self,loc1, loc2):
         return math.sqrt((loc1['x'] - loc2['x'])**2 + (loc1['z'] - loc2['z'])**2)
 
    
-    
     # 判断是否连续多帧大幅度掉血
     def check_decresing_hp(self, hp_queue):
-        # for i in range(1, len(hp_queue)):
-        #     current = hp_queue[i]
-        #     previous = hp_queue[i - 1]
-            
-        #     if current >= previous * 0.9:
-        #         return False
         if len(hp_queue) >1 and hp_queue[len(hp_queue)-1] <= 0.4 * hp_queue[0]:
             return True
         return False
-
     
-##################################################################  
+
     def get_reward(self, frame_data, reward_dict):
         reward_dict.clear()
         reward_sum, weight_sum = 0.0, 0.0
